@@ -24,6 +24,23 @@ async fn setup_client() -> PusherClient {
     PusherClient::new(config).unwrap()
 }
 
+async fn wait_for_socket_id(client: &PusherClient) {
+    let mut attempts = 0;
+    const MAX_ATTEMPTS: u32 = 10;
+    const WAIT_TIME: Duration = Duration::from_millis(100);
+
+    while attempts < MAX_ATTEMPTS {
+        if let Ok(Some(socket_id)) = client.get_socket_id().await {
+            if !socket_id.is_empty() {
+                return;
+            }
+        }
+        tokio::time::sleep(WAIT_TIME).await;
+        attempts += 1;
+    }
+    panic!("Socket ID was not set after {} attempts", MAX_ATTEMPTS);
+}
+
 #[tokio::test]
 async fn test_pusher_client_connection() {
     let mut client = setup_client().await;
@@ -33,6 +50,14 @@ async fn test_pusher_client_connection() {
         client.get_connection_state().await,
         ConnectionState::Connected
     );
+
+    // Wait for socket ID to be set
+    wait_for_socket_id(&client).await;
+
+    // Verify socket ID is not empty
+    let socket_id = client.get_socket_id().await.unwrap();
+    assert!(socket_id.is_some(), "Socket ID should be set after connection");
+    assert!(!socket_id.unwrap().is_empty(), "Socket ID should not be empty");
 
     client.disconnect().await.unwrap();
     assert_eq!(
@@ -58,6 +83,14 @@ async fn test_channel_subscription() {
         client.get_connection_state().await,
         ConnectionState::Connected
     );
+
+    // Wait for socket ID to be set
+    wait_for_socket_id(&client).await;
+
+    // Verify socket ID is set before subscribing
+    let socket_id = client.get_socket_id().await.unwrap();
+    assert!(socket_id.is_some(), "Socket ID should be set before subscribing");
+    assert!(!socket_id.unwrap().is_empty(), "Socket ID should not be empty");
 
     // Subscribe to the channel
     match timeout(Duration::from_secs(5), client.subscribe("test-channel")).await {
@@ -94,13 +127,33 @@ async fn test_channel_subscription() {
 
 #[tokio::test]
 async fn test_event_binding() {
-    let client = setup_client().await;
+    let mut client = setup_client().await;
 
+    // Connect to Pusher
+    client.connect().await.unwrap();
+    assert_eq!(
+        client.get_connection_state().await,
+        ConnectionState::Connected
+    );
+
+    // Wait for socket ID to be set
+    wait_for_socket_id(&client).await;
+
+    // Verify socket ID is set
+    let socket_id = client.get_socket_id().await.unwrap();
+    assert!(socket_id.is_some(), "Socket ID should be set after connection");
+    assert!(!socket_id.unwrap().is_empty(), "Socket ID should not be empty");
+
+    // Create a flag to track if the event was received
     let event_received = Arc::new(RwLock::new(false));
     let event_received_clone = event_received.clone();
 
+    // Subscribe to the test channel first
+    client.subscribe("test-channel").await.unwrap();
+
+    // Bind to the test event
     client
-        .bind("test-event", move |_event: Event| {
+        .bind("test-event", move |_| {
             let event_received = event_received_clone.clone();
             tokio::spawn(async move {
                 let mut flag = event_received.write().await;
@@ -110,16 +163,17 @@ async fn test_event_binding() {
         .await
         .unwrap();
 
-    let event = Event::new(
-        "test-event".to_string(),
-        None,
-        serde_json::json!({}).to_string()
-    );
-    client.send_test_event(event).await.unwrap();
+    // Wait a bit for the binding to be processed
+    tokio::time::sleep(Duration::from_secs(1)).await;
 
-    sleep(Duration::from_millis(100)).await;
+    // Trigger the event
+    client.trigger("test-channel", "test-event", "{}").await.unwrap();
 
-    assert!(*event_received.read().await);
+    // Wait for the event to be processed
+    tokio::time::sleep(Duration::from_secs(2)).await;
+
+    // Verify the event was received
+    assert!(*event_received.read().await, "Event should have been received");
 }
 
 #[tokio::test]
