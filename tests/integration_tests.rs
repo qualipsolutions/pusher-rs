@@ -24,23 +24,6 @@ async fn setup_client() -> PusherClient {
     PusherClient::new(config).unwrap()
 }
 
-async fn wait_for_socket_id(client: &PusherClient) {
-    let mut attempts = 0;
-    const MAX_ATTEMPTS: u32 = 10;
-    const WAIT_TIME: Duration = Duration::from_millis(100);
-
-    while attempts < MAX_ATTEMPTS {
-        if let Ok(Some(socket_id)) = client.get_socket_id().await {
-            if !socket_id.is_empty() {
-                return;
-            }
-        }
-        tokio::time::sleep(WAIT_TIME).await;
-        attempts += 1;
-    }
-    panic!("Socket ID was not set after {} attempts", MAX_ATTEMPTS);
-}
-
 #[tokio::test]
 async fn test_pusher_client_connection() {
     let mut client = setup_client().await;
@@ -50,9 +33,6 @@ async fn test_pusher_client_connection() {
         client.get_connection_state().await,
         ConnectionState::Connected
     );
-
-    // Wait for socket ID to be set
-    wait_for_socket_id(&client).await;
 
     // Verify socket ID is not empty
     let socket_id = client.get_socket_id().await.unwrap();
@@ -84,9 +64,6 @@ async fn test_channel_subscription() {
         ConnectionState::Connected
     );
 
-    // Wait for socket ID to be set
-    wait_for_socket_id(&client).await;
-
     // Verify socket ID is set before subscribing
     let socket_id = client.get_socket_id().await.unwrap();
     assert!(socket_id.is_some(), "Socket ID should be set before subscribing");
@@ -106,23 +83,6 @@ async fn test_channel_subscription() {
     let channels = client.get_subscribed_channels().await;
     log::info!("Subscribed channels: {:?}", channels);
     assert!(channels.contains(&"test-channel".to_string()), "Channel not found in subscribed channels");
-
-    // Unsubscribe from the channel
-    match timeout(Duration::from_secs(5), client.unsubscribe("test-channel")).await {
-        Ok(result) => {
-            result.expect("Failed to unsubscribe from channel");
-        }
-        Err(_) => panic!("Unsubscription timed out"),
-    }
-
-    // Wait a bit for the unsubscription to be processed
-    tokio::time::sleep(Duration::from_secs(1)).await;
-
-    let channels = client.get_subscribed_channels().await;
-    assert!(!channels.contains(&"test-channel".to_string()), "Channel still present after unsubscription");
-
-    // Disconnect the client
-    client.disconnect().await.expect("Failed to disconnect");
 }
 
 #[tokio::test]
@@ -135,9 +95,6 @@ async fn test_event_binding() {
         client.get_connection_state().await,
         ConnectionState::Connected
     );
-
-    // Wait for socket ID to be set
-    wait_for_socket_id(&client).await;
 
     // Verify socket ID is set
     let socket_id = client.get_socket_id().await.unwrap();

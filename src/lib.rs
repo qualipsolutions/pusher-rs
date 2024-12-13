@@ -22,6 +22,7 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 use url::Url;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
+use std::time::Duration;
 
 pub use auth::PusherAuth;
 pub use channels::{Channel, ChannelType};
@@ -128,7 +129,7 @@ impl PusherClient {
         }
     }
 
-    /// Connects to the Pusher server.
+    /// Connects to the Pusher server and waits for the socket ID to be set.
     ///
     /// # Returns
     ///
@@ -154,7 +155,22 @@ impl PusherClient {
 
         self.websocket_command_tx = Some(command_tx);
 
-        Ok(())
+        // Wait for socket ID to be set
+        let mut attempts = 0;
+        const MAX_ATTEMPTS: u32 = 10;
+        const WAIT_TIME: Duration = Duration::from_millis(100);
+
+        while attempts < MAX_ATTEMPTS {
+            if let Some(socket_id) = self.socket_id.read().await.clone() {
+                if !socket_id.is_empty() {
+                    return Ok(());
+                }
+            }
+            tokio::time::sleep(WAIT_TIME).await;
+            attempts += 1;
+        }
+
+        Err(PusherError::ConnectionError("Socket ID was not set after connection".into()))
     }
 
     /// Disconnects from the Pusher server.
