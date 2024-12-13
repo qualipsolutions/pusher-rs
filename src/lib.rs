@@ -15,7 +15,7 @@ use cbc::{Decryptor, Encryptor};
 use hmac::{Hmac, Mac};
 use log::info;
 use rand::Rng;
-use serde_json::{json, Value};
+use serde_json::json;
 use sha2::Sha256;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -42,6 +42,7 @@ pub struct PusherClient {
     state: Arc<RwLock<ConnectionState>>,
     event_tx: mpsc::Sender<Event>,
     encrypted_channels: Arc<RwLock<HashMap<String, Vec<u8>>>>,
+    socket_id: Arc<RwLock<Option<String>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -76,6 +77,7 @@ impl PusherClient {
         let state = Arc::new(RwLock::new(ConnectionState::Disconnected));
         let event_handlers = Arc::new(RwLock::new(std::collections::HashMap::new()));
         let encrypted_channels = Arc::new(RwLock::new(std::collections::HashMap::new()));
+        let socket_id = Arc::new(RwLock::new(None));
 
         let client = Self {
             config,
@@ -86,6 +88,7 @@ impl PusherClient {
             state: state.clone(),
             event_tx,
             encrypted_channels,
+            socket_id,
         };
 
         tokio::spawn(Self::handle_events(event_rx, event_handlers));
@@ -138,6 +141,7 @@ impl PusherClient {
             Arc::clone(&self.state),
             self.event_tx.clone(),
             command_rx,
+            Arc::clone(&self.socket_id),
         );
 
         log::info!("Connecting to Pusher using URL: {}", url);
@@ -403,19 +407,6 @@ impl PusherClient {
         Ok(())
     }
 
-    async fn handle_event(
-        event: Event,
-        handlers: &Arc<RwLock<HashMap<String, Vec<Box<dyn Fn(Event) + Send + Sync + 'static>>>>>,
-    ) -> PusherResult<()> {
-        let handlers = handlers.read().await;
-        if let Some(callbacks) = handlers.get(&event.event) {
-            for callback in callbacks {
-                callback(event.clone());
-            }
-        }
-        Ok(())
-    }
-
     fn get_websocket_url(&self) -> PusherResult<Url> {
         let scheme = if self.config.use_tls { "wss" } else { "ws" };
         info!("Connecting to Pusher using scheme: {}", scheme);
@@ -458,42 +449,6 @@ impl PusherClient {
         Ok(base64::encode(result))
     }
 
-    /// Decrypts encrypted data using the shared secret.
-    ///
-    /// # Arguments
-    ///
-    /// * `encrypted_data` - The encrypted data to decrypt.
-    /// * `shared_secret` - The shared secret to use for decryption.
-    ///
-    /// # Returns
-    ///
-    /// A `PusherResult` containing the decrypted data.
-    ///
-    /// # Errors
-    ///
-    /// Returns a `PusherError` if the data cannot be decrypted.
-    ///
-    fn decrypt_data(&self, encrypted_data: &str, shared_secret: &[u8]) -> PusherResult<String> {
-        let decoded = base64::decode(encrypted_data)
-            .map_err(|e| PusherError::DecryptionError(e.to_string()))?;
-
-        if decoded.len() < 16 {
-            return Err(PusherError::DecryptionError(
-                "Invalid encrypted data".to_string(),
-            ));
-        }
-
-        let (iv, ciphertext) = decoded.split_at(16);
-        let cipher = Decryptor::<Aes256>::new(shared_secret.into(), iv.into());
-
-        let mut buffer = ciphertext.to_vec();
-        let decrypted_data = cipher
-            .decrypt_padded_mut::<Pkcs7>(&mut buffer)
-            .map_err(|e| PusherError::DecryptionError(e.to_string()))?;
-
-        String::from_utf8(decrypted_data.to_vec())
-            .map_err(|e| PusherError::DecryptionError(e.to_string()))
-    }
 
     /// Gets the current connection state.
     ///
@@ -527,6 +482,62 @@ impl PusherClient {
             .send(event)
             .await
             .map_err(|e| PusherError::WebSocketError(e.to_string()))
+    }
+
+    /// Gets the current socket ID if connected, or None if not connected.
+    ///
+    /// # Returns
+    ///
+    /// A `PusherResult` containing the socket ID string if connected, or None if not connected.
+    pub async fn get_socket_id(&self) -> PusherResult<Option<String>> {
+        Ok(self.socket_id.read().await.clone())
+    }
+
+    /// Binds a callback to be executed when the client connects to Pusher.
+    ///
+    /// # Arguments
+    ///
+    /// * `callback` - A function to be called when the connection is established
+    ///
+    /// # Returns
+    ///
+    /// A `PusherResult` indicating success or failure.
+    pub async fn on_connect<F>(&self, callback: F) -> PusherResult<()>
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.bind("pusher:connection_established", move |_| {
+            callback();
+        })
+        .await
+    }
+
+    /// Binds a callback to be executed when the client disconnects from Pusher.
+    ///
+    /// # Arguments
+    ///
+    /// * `callback` - A function to be called when the connection is lost
+    ///
+    /// # Returns
+    ///
+    /// A `PusherResult` indicating success or failure.
+    pub async fn on_disconnect<F>(&self, callback: F) -> PusherResult<()>
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.bind("pusher:disconnected", move |_| {
+            callback();
+        })
+        .await
+    }
+
+    /// Checks if the client is currently connected to Pusher.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the client is connected, `false` otherwise.
+    pub async fn is_connected(&self) -> bool {
+        matches!(self.get_connection_state().await, ConnectionState::Connected)
     }
 }
 

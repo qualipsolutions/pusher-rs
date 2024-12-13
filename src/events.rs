@@ -4,13 +4,12 @@ use serde_json::Value;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Event {
     pub event: String,
+    pub data: String,
     pub channel: Option<String>,
-    #[serde(with = "json_string")]
-    pub data: Value,
 }
 
 impl Event {
-    pub fn new(event: String, channel: Option<String>, data: Value) -> Self {
+    pub fn new(event: String, channel: Option<String>, data: String) -> Self {
         Self {
             event,
             channel,
@@ -114,25 +113,6 @@ impl SystemEvent {
     }
 }
 
-mod json_string {
-    use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
-    use serde_json::Value;
-
-    pub fn serialize<S>(value: &Value, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        value.to_string().serialize(serializer)
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Value, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        serde_json::from_str(&s).map_err(D::Error::custom)
-    }
-}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -143,7 +123,7 @@ mod tests {
         let event = Event::new(
             "test_event".to_string(),
             Some("test_channel".to_string()),
-            json!({"message": "Hello, world!"}),
+            json!({"message": "Hello, world!"}).to_string(),
         );
 
         let serialized = serde_json::to_string(&event).unwrap();
@@ -244,7 +224,6 @@ mod tests {
     }
 }
 
-
 impl Event {
     pub fn is_presence_event(&self) -> bool {
         matches!(self.event.as_str(), "pusher:member_added" | "pusher:member_removed")
@@ -263,7 +242,6 @@ impl Event {
     }
 }
 
-
 impl SystemEvent {
     pub fn is_presence_event(&self) -> bool {
         matches!(self.event.as_str(), "pusher:member_added" | "pusher:member_removed")
@@ -277,7 +255,7 @@ impl SystemEvent {
         Event {
             event: self.event.clone(),
             channel: self.channel.clone(),
-            data: serde_json::to_value(&self.data).unwrap(),
+            data: serde_json::to_value(&self.data).unwrap().to_string(),
         }
     }
 }

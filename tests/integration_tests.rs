@@ -110,7 +110,11 @@ async fn test_event_binding() {
         .await
         .unwrap();
 
-    let event = Event::new("test-event".to_string(), None, serde_json::json!({}));
+    let event = Event::new(
+        "test-event".to_string(),
+        None,
+        serde_json::json!({}).to_string()
+    );
     client.send_test_event(event).await.unwrap();
 
     sleep(Duration::from_millis(100)).await;
@@ -134,7 +138,6 @@ async fn test_encrypted_channel() {
 
     // TODO - Test sending and receiving encrypted messages
 }
-
 
 #[tokio::test]
 async fn test_send_payload() {
@@ -184,24 +187,21 @@ async fn test_send_payload() {
         .await
         .expect("Failed to bind event");
 
-    // Trigger the event
-    match client.trigger(test_channel, test_event, test_data).await {
-        Ok(_) => println!("Event triggered successfully"),
-        Err(e) => panic!("Failed to trigger event: {:?}", e),
-    }
+    // Create and trigger the event
+    client.trigger(test_channel, test_event, test_data).await.unwrap();
+    println!("Event triggered successfully");
 
     // Wait for the event to be processed
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    sleep(Duration::from_secs(1)).await;
 
-    // let's ssert that the event was received and processed
+    // Assert that the event was received and processed
     assert!(*event_received.read().await, "Event was not received");
 
-    // let's assert that the received data matches the sent data
+    // Assert that the received data matches the sent data
     let received = received_data.read().await;
-    let expected_data: serde_json::Value = serde_json::from_str(test_data).unwrap();
     assert_eq!(
-        received.as_ref().unwrap(),
-        &expected_data,
+        received.as_ref().unwrap().trim(),
+        test_data.trim(),
         "Received data does not match sent data"
     );
 

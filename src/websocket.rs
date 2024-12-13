@@ -10,11 +10,10 @@ use tokio::time::{sleep, interval, Duration};
 use url::Url;
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
-use log::{debug, error, info, warn};
-use std::pin::Pin;
+use log::{debug, error, info};
 
 use crate::error::{PusherError, PusherResult};
-use crate::{Event, SystemEvent, ConnectionState};
+use crate::{Event, ConnectionState};
 
 const PING_INTERVAL: Duration = Duration::from_secs(30);
 const PONG_TIMEOUT: Duration = Duration::from_secs(10);
@@ -25,6 +24,7 @@ pub struct WebSocketClient {
     state: Arc<RwLock<ConnectionState>>,
     event_tx: mpsc::Sender<Event>,
     command_rx: mpsc::Receiver<WebSocketCommand>,
+    socket_id: Arc<RwLock<Option<String>>>,
 }
 
 pub enum WebSocketCommand {
@@ -38,6 +38,7 @@ impl WebSocketClient {
         state: Arc<RwLock<ConnectionState>>,
         event_tx: mpsc::Sender<Event>,
         command_rx: mpsc::Receiver<WebSocketCommand>,
+        socket_id: Arc<RwLock<Option<String>>>,
     ) -> Self {
         Self {
             url,
@@ -45,6 +46,7 @@ impl WebSocketClient {
             state,
             event_tx,
             command_rx,
+            socket_id,
         }
     }
 
@@ -141,6 +143,14 @@ impl WebSocketClient {
     async fn handle_text_message(&self, text: String) {
         debug!("Received text message: {}", text);
         if let Ok(event) = serde_json::from_str::<Event>(&text) {
+            if event.event == "pusher:connection_established" {
+                let data: serde_json::Value = serde_json::from_str(&event.data).unwrap_or_default();
+                if let Some(socket_id) = data.get("socket_id").and_then(|v| v.as_str()) {
+                    let mut socket_id_guard = self.socket_id.write().await;
+                    *socket_id_guard = Some(socket_id.to_string());
+                }
+            }
+
             if let Err(e) = self.event_tx.send(event).await {
                 error!("Failed to send event to handler: {}", e);
             }
