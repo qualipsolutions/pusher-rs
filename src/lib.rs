@@ -8,10 +8,10 @@ mod events;
 mod websocket;
 
 use aes::{
-    cipher::{block_padding::Pkcs7, BlockDecryptMut, BlockEncryptMut, KeyIvInit},
+    cipher::{block_padding::Pkcs7, BlockEncryptMut, KeyIvInit},
     Aes256,
 };
-use cbc::{Decryptor, Encryptor};
+use cbc::Encryptor;
 use hmac::{Hmac, Mac};
 use log::info;
 use rand::Rng;

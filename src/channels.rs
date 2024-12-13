@@ -91,10 +91,12 @@ impl Channel {
     }
 }
 
+#[allow(dead_code)]
 pub struct ChannelList {
-    channels: HashMap<String, Channel>,
+    pub(crate) channels: HashMap<String, Channel>,
 }
 
+#[allow(dead_code)]
 impl ChannelList {
     pub fn new() -> Self {
         Self {
@@ -102,14 +104,18 @@ impl ChannelList {
         }
     }
 
-    pub fn add(&mut self, channel: Channel) {
+    pub(crate) fn add(&mut self, channel: Channel) {
         self.channels.insert(channel.name().to_string(), channel);
     }
 
-    pub fn remove(&mut self, channel_name: &str) -> Option<Channel> {
+    pub(crate) fn remove(&mut self, channel_name: &str) -> Option<Channel> {
         self.channels.remove(channel_name)
     }
+}
 
+#[allow(dead_code)]
+#[cfg(test)]
+impl ChannelList {
     pub fn get(&self, channel_name: &str) -> Option<&Channel> {
         self.channels.get(channel_name)
     }

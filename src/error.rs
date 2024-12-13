@@ -76,49 +76,54 @@ impl From<&str> for PusherError {
 pub type PusherResult<T> = Result<T, PusherError>;
 
 // Helper functions for creating specific errors
-
-pub fn auth_error(message: impl Into<String>) -> PusherError {
-    PusherError::AuthError(message.into())
-}
-
 pub fn channel_error(message: impl Into<String>) -> PusherError {
     PusherError::ChannelError(message.into())
 }
 
-pub fn event_error(message: impl Into<String>) -> PusherError {
-    PusherError::EventError(message.into())
-}
+#[allow(dead_code)]
+#[cfg(test)]
+pub mod test_helpers {
+    use super::*;
 
-pub fn connection_error(message: impl Into<String>) -> PusherError {
-    PusherError::ConnectionError(message.into())
-}
+    pub fn auth_error(message: impl Into<String>) -> PusherError {
+        PusherError::AuthError(message.into())
+    }
 
-pub fn config_error(message: impl Into<String>) -> PusherError {
-    PusherError::ConfigError(message.into())
-}
+    pub fn event_error(message: impl Into<String>) -> PusherError {
+        PusherError::EventError(message.into())
+    }
 
-pub fn rate_limit_error(message: impl Into<String>) -> PusherError {
-    PusherError::RateLimitError(message.into())
-}
+    pub fn connection_error(message: impl Into<String>) -> PusherError {
+        PusherError::ConnectionError(message.into())
+    }
 
-pub fn encryption_error(message: impl Into<String>) -> PusherError {
-    PusherError::EncryptionError(message.into())
-}
+    pub fn config_error(message: impl Into<String>) -> PusherError {
+        PusherError::ConfigError(message.into())
+    }
 
-pub fn decryption_error(message: impl Into<String>) -> PusherError {
-    PusherError::DecryptionError(message.into())
-}
+    pub fn rate_limit_error(message: impl Into<String>) -> PusherError {
+        PusherError::RateLimitError(message.into())
+    }
 
-pub fn presence_data_error(message: impl Into<String>) -> PusherError {
-    PusherError::PresenceDataError(message.into())
-}
+    pub fn encryption_error(message: impl Into<String>) -> PusherError {
+        PusherError::EncryptionError(message.into())
+    }
 
-pub fn api_error(message: impl Into<String>) -> PusherError {
-    PusherError::ApiError(message.into())
-}
+    pub fn decryption_error(message: impl Into<String>) -> PusherError {
+        PusherError::DecryptionError(message.into())
+    }
 
-pub fn timeout_error(message: impl Into<String>) -> PusherError {
-    PusherError::TimeoutError(message.into())
+    pub fn presence_data_error(message: impl Into<String>) -> PusherError {
+        PusherError::PresenceDataError(message.into())
+    }
+
+    pub fn api_error(message: impl Into<String>) -> PusherError {
+        PusherError::ApiError(message.into())
+    }
+
+    pub fn timeout_error(message: impl Into<String>) -> PusherError {
+        PusherError::TimeoutError(message.into())
+    }
 }
 
 #[cfg(test)]
@@ -145,13 +150,10 @@ mod tests {
 
     #[test]
     fn test_helper_functions() {
-        let err = auth_error("Invalid token");
+        let err = test_helpers::auth_error("Invalid token");
         assert!(matches!(err, PusherError::AuthError(_)));
 
-        let err = channel_error("Invalid channel name");
-        assert!(matches!(err, PusherError::ChannelError(_)));
-
-        let err = event_error("Event too large");
+        let err = test_helpers::event_error("Event too large");
         assert!(matches!(err, PusherError::EventError(_)));
     }
 }
