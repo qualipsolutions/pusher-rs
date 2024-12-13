@@ -21,6 +21,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 use url::Url;
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 
 pub use auth::PusherAuth;
 pub use channels::{Channel, ChannelType};
@@ -435,7 +436,7 @@ impl PusherClient {
         let cipher = Encryptor::<Aes256>::new(shared_secret.into(), &iv.into());
 
         let plaintext = data.as_bytes();
-        let mut buffer = vec![0u8; plaintext.len() + 16]; // Add space for padding. 16 is the block size. We shall revisit.
+        let mut buffer = vec![0u8; plaintext.len() + 16]; // Add space for padding
         buffer[..plaintext.len()].copy_from_slice(plaintext);
 
         let ciphertext_len = cipher
@@ -446,7 +447,7 @@ impl PusherClient {
         let mut result = iv.to_vec();
         result.extend_from_slice(&buffer[..ciphertext_len]);
 
-        Ok(base64::encode(result))
+        Ok(STANDARD.encode(result))
     }
 
 
