@@ -1,0 +1,14 @@
+{
+  "cSpell.words": [
+    "ciphertext",
+    "Encryptor",
+    "hmac",
+    "Hmac",
+    "HMAC",
+    "Pkcs",
+    "println",
+    "reqwest",
+    "serde",
+    "tungstenite"
+  ]
+}

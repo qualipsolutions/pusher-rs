@@ -556,6 +556,64 @@ impl PusherClient {
     pub async fn is_connected(&self) -> bool {
         matches!(self.get_connection_state().await, ConnectionState::Connected)
     }
+
+    /// Authenticates a presence channel subscription.
+    ///
+    /// # Arguments
+    ///
+    /// * `socket_id` - The socket ID obtained from the connection
+    /// * `channel` - The name of the presence channel
+    /// * `user_id` - The user ID to authenticate with
+    /// * `user_info` - Optional user information
+    ///
+    /// # Returns
+    ///
+    /// A `PusherResult` containing the authentication signature
+    pub fn authenticate_presence_channel(
+        &self,
+        socket_id: &str,
+        channel: &str,
+        user_id: &str,
+        user_info: Option<&serde_json::Value>,
+    ) -> PusherResult<String> {
+        self.auth.authenticate_presence_channel(socket_id, channel, user_id, user_info)
+    }
+
+    /// Subscribes to a channel with authentication.
+    ///
+    /// # Arguments
+    ///
+    /// * `channel_name` - The name of the channel to subscribe to
+    /// * `auth` - The authentication signature obtained from authenticate_presence_channel
+    /// * `channel_data` - Optional channel data for presence channels
+    ///
+    /// # Returns
+    ///
+    /// A `PusherResult` indicating success or failure
+    pub async fn subscribe_with_auth(
+        &mut self,
+        channel_name: &str,
+        auth: &str,
+        channel_data: Option<&str>,
+    ) -> PusherResult<()> {
+        let channel = Channel::new(channel_name);
+        let mut channels = self.channels.write().await;
+        channels.insert(channel_name.to_string(), channel);
+
+        let mut data = json!({
+            "event": "pusher:subscribe",
+            "data": {
+                "channel": channel_name,
+                "auth": auth
+            }
+        });
+
+        if let Some(channel_data) = channel_data {
+            data["data"]["channel_data"] = serde_json::Value::String(channel_data.to_string());
+        }
+
+        self.send(serde_json::to_string(&data)?).await
+    }
 }
 
 #[cfg(test)]

@@ -222,3 +222,50 @@ async fn test_send_payload() {
         .expect("Failed to unsubscribe from channel");
     client.disconnect().await.expect("Failed to disconnect");
 }
+
+#[tokio::test]
+async fn test_presence_channel_subscription() {
+    let mut client = setup_client().await;
+
+    // Connect to Pusher
+    client.connect().await.unwrap();
+    assert_eq!(
+        client.get_connection_state().await,
+        ConnectionState::Connected
+    );
+
+    // Get socket ID
+    let socket_id = client.get_socket_id().await.unwrap().unwrap();
+    assert!(!socket_id.is_empty(), "Socket ID should not be empty");
+
+    // Set up presence channel data
+    let channel = "presence-test-channel";
+    let user_id = "test_user_123";
+    let user_info = serde_json::json!({
+        "name": "Test User",
+        "email": "test@example.com"
+    });
+
+    // Create channel data
+    let channel_data = serde_json::json!({
+        "user_id": user_id,
+        "user_info": user_info
+    });
+    let channel_data_str = serde_json::to_string(&channel_data).unwrap();
+
+    // Get auth signature
+    let auth = client
+        .authenticate_presence_channel(&socket_id, channel, user_id, Some(&user_info))
+        .unwrap();
+
+    // Subscribe with auth and channel data
+    client.subscribe_with_auth(channel, &auth, Some(&channel_data_str)).await.unwrap();
+
+    // Verify subscription
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    let channels = client.get_subscribed_channels().await;
+    assert!(
+        channels.contains(&channel.to_string()),
+        "Channel not found in subscribed channels"
+    );
+}

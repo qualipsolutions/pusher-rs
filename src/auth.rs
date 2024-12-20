@@ -42,12 +42,11 @@ impl PusherAuth {
         }
 
         let channel_data_str = serde_json::to_string(&channel_data)?;
-        let auth_signature =
-            self.sign_socket_with_channel_data(socket_id, channel_name, &channel_data_str)?;
+        let auth_signature = self.sign_socket_with_channel_data(socket_id, channel_name, &channel_data_str)?;
 
         Ok(format!(
-            "{}:{}:{}",
-            self.key, auth_signature, channel_data_str
+            "{}:{}",
+            self.key, auth_signature
         ))
     }
 
